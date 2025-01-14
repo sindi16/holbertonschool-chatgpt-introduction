@@ -12,6 +12,8 @@ class Minesweeper:
         self.mines = set(random.sample(range(width * height), mines))
         self.field = [[' ' for _ in range(width)] for _ in range(height)]
         self.revealed = [[False for _ in range(width)] for _ in range(height)]
+        self.flags = [[False for _ in range(width)] for _ in range(height)]
+        self.game_over = False
 
     def print_board(self, reveal=False):
         clear_screen()
@@ -19,14 +21,20 @@ class Minesweeper:
         for y in range(self.height):
             print(y, end=' ')
             for x in range(self.width):
-                if reveal or self.revealed[y][x]:
-                    if self.get_index(x, y) in self.mines:
+                if reveal:
+                    if (y * self.width + x) in self.mines:
                         print('*', end=' ')
                     else:
                         count = self.count_mines_nearby(x, y)
                         print(count if count > 0 else ' ', end=' ')
                 else:
-                    print('.', end=' ')
+                    if self.revealed[y][x]:
+                        count = self.count_mines_nearby(x, y)
+                        print(count if count > 0 else ' ', end=' ')
+                    elif self.flags[y][x]:
+                        print('F', end=' ')
+                    else:
+                        print('.', end=' ')
             print()
 
     def count_mines_nearby(self, x, y):
@@ -35,47 +43,69 @@ class Minesweeper:
             for dy in [-1, 0, 1]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < self.width and 0 <= ny < self.height:
-                    if self.get_index(nx, ny) in self.mines:
+                    if (ny * self.width + nx) in self.mines:
                         count += 1
         return count
 
-    def get_index(self, x, y):
-        # Convert (x, y) to a single index for the mines set
-        return y * self.width + x
-
     def reveal(self, x, y):
-        if self.get_index(x, y) in self.mines:
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            print("Coordinates are out of bounds!")
+            return True  # Don't end the game, just retry.
+
+        if self.revealed[y][x] or self.flags[y][x]:
+            print("This cell is already revealed or flagged.")
+            return True
+
+        if (y * self.width + x) in self.mines:
+            self.game_over = True
             return False
+
         self.revealed[y][x] = True
         if self.count_mines_nearby(x, y) == 0:
-            # Avoid recursion; use a queue to reveal adjacent cells iteratively
-            stack = [(x, y)]
-            while stack:
-                cx, cy = stack.pop()
-                for dx in [-1, 0, 1]:
-                    for dy in [-1, 0, 1]:
-                        nx, ny = cx + dx, cy + dy
-                        if 0 <= nx < self.width and 0 <= ny < self.height and not self.revealed[ny][nx]:
-                            self.revealed[ny][nx] = True
-                            if self.count_mines_nearby(nx, ny) == 0:
-                                stack.append((nx, ny))
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height and not self.revealed[ny][nx]:
+                        self.reveal(nx, ny)
         return True
 
+    def toggle_flag(self, x, y):
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            print("Coordinates are out of bounds!")
+            return
+
+        if self.revealed[y][x]:
+            print("Cannot flag a revealed cell.")
+            return
+
+        self.flags[y][x] = not self.flags[y][x]
+
     def play(self):
-        while True:
+        while not self.game_over:
             self.print_board()
             try:
-                x = int(input("Enter x coordinate (0 to {}): ".format(self.width - 1)))
-                y = int(input("Enter y coordinate (0 to {}): ".format(self.height - 1)))
-                if not (0 <= x < self.width and 0 <= y < self.height):
-                    print("Invalid coordinates. Please try again.")
+                action = input("Enter action (r x y for reveal, f x y for flag): ").split()
+                if len(action) != 3:
+                    print("Invalid input. Format: r x y or f x y")
                     continue
-                if not self.reveal(x, y):
-                    self.print_board(reveal=True)
-                    print("Game Over! You hit a mine.")
-                    break
+
+                command, x, y = action[0], int(action[1]), int(action[2])
+                if command == 'r':
+                    if not self.reveal(x, y):
+                        self.print_board(reveal=True)
+                        print("Game Over! You hit a mine.")
+                        break
+                elif command == 'f':
+                    self.toggle_flag(x, y)
+                else:
+                    print("Invalid command. Use 'r' to reveal or 'f' to flag.")
             except ValueError:
-                print("Invalid input. Please enter numbers only.")
+                print("Invalid input. Please enter valid coordinates.")
+            except IndexError:
+                print("Coordinates are out of bounds!")
+
+        if not self.game_over:
+            print("Congratulations! You cleared the minefield.")
 
 if __name__ == "__main__":
     game = Minesweeper()
